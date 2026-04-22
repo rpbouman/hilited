@@ -1,0 +1,29 @@
+.hilited-editor {
+  &::highlight( hilited-json-key ) {
+    color: green;
+  }
+
+  &::highlight( hilited-json-keyword ) {
+    color: blue;
+    /* 
+      faux bold effect. 
+      (font-weight is not supported for css ::highlight pseudo element, but text shadow is)
+    */
+    text-shadow: currentColor 0.4px 0,
+                 currentColor 0px 0.4px;
+  }
+
+  &::highlight( hilited-json-interpunction ) {
+    color: black;
+  }
+
+  &::highlight( hilited-json-number ),
+  &::highlight( hilited-json-string ){
+    color: red;
+  }
+  
+  &::highlight( hilited-json-__other__ ){
+    text-decoration-line: spelling-error;
+    text-decoration-color: red;
+  }
+}
