@@ -1,40 +1,47 @@
 class Hilited {
-  
+
   #options = undefined;
   #element = undefined;
   #elementStyle = undefined;
   #paddingTop = undefined;
   #paddingBottom = undefined;
 
-  #tokenizer = undefined; 
+  #tokenizer = undefined;
   #tokens = [];
   #hasMoreTokens = undefined;
 
   #lines = [];
-  #visibleLines = []; 
+  #visibleLines = [];
   #lineCount = 0;
   #text = '';
-  
+
   #highlighters = {};
   #resizeObserver = undefined;
   #tabSize = undefined;
   #oldSelection = undefined;
   #oldScrollTop = undefined;
-  
+  #selectionChangePending = false;
+  #selectionInterval = undefined;
+
   static #defaultOptions = {
     highlighterPrefix: 'hilited',
     // hard tabs means: use tab characters for indent.
     hardTabs: true,
   };
-    
+
   #syncLinenumber(){
     const firstVisibleLine = Math.round(this.#element.scrollTop / this.#element.scrollHeight * this.#lineCount);
     this.#element.parentNode.style.setProperty('--linenumber', firstVisibleLine);
   }
-    
+
   #renderingTimeout = undefined;
   #handleScroll(event){
     this.#syncLinenumber();
+    const firstLine = this.#visibleLines[0]?.line ?? 0;
+    this.#element.dispatchEvent(new CustomEvent('hilited:scroll', {
+      bubbles: true,
+      detail: { firstLine }
+    }));
   }
   #thisHandleScroll = this.#handleScroll.bind(this);
 
@@ -47,20 +54,21 @@ class Hilited {
     setTimeout( this.#thisUpdateHighlighting, 0);
   }
   #thisHandleScrollEnd = this.#handleScrollEnd.bind(this);
-  
+
   #updateElementDimension(){
     this.#elementStyle = getComputedStyle(this.#element);
     this.#paddingTop = parseInt(this.#elementStyle.getPropertyValue('padding-top'), 10);
     this.#paddingBottom = parseInt(this.#elementStyle.getPropertyValue('padding-bottom'), 10);
     this.#tabSize = parseInt(this.#elementStyle.getPropertyValue('tab-size'), 10);
   }
-  
+
   #thisResize = (function(){
     this.#updateElementDimension();
     this.#updateHighlighting();
+    this.#element.dispatchEvent(new CustomEvent('hilited:resize', { bubbles: true }));
     this.#renderingTimeout = undefined;
   }.bind(this));
-    
+
   #handleResize(entries){
     if (this.#renderingTimeout){
       clearTimeout(this.#renderingTimeout);
@@ -68,15 +76,15 @@ class Hilited {
     this.#renderingTimeout = setTimeout(this.#thisResize, 100);
   }
   #thisHandleResize = this.#handleResize.bind(this);
-  
+
   #handleTab(shiftKey){
     const hardTabs = this.#options.hardTabs;
-    var tabSize = this.#tabSize;
-    var selection = this.#getSelection();
-    var textToInsert;
-    var endLine, startLine = this.#getLineForPosition(selection.start, this.#lines);
-    var lines;
-    var selectionCollapsed = selection.start === selection.end;
+    const tabSize = this.#tabSize;
+    const selection = this.#getSelection();
+    let textToInsert;
+    const startLine = this.#getLineForPosition(selection.start, this.#lines);
+    let lines, selectionStart;
+    const selectionCollapsed = selection.start === selection.end;
     if (selectionCollapsed) {
       if (hardTabs){
         if (shiftKey){
@@ -89,7 +97,7 @@ class Hilited {
         }
       }
       else {
-        var numSpaces;
+        let numSpaces;
         if (shiftKey){
           if (this.#text.charAt(selection.start - 1) === '\t'){
             document.execCommand('delete');
@@ -99,17 +107,17 @@ class Hilited {
             if (numSpaces === 0){
               numSpaces = tabSize;
             }
-            var selectionStart = selection.start;
+            selectionStart = selection.start;
             while (this.#text.charAt( selectionStart - 1 ) === ' ' && selection.start - (selectionStart - 1) <= numSpaces) {
               selectionStart -= 1;
             }
-            this.#createSelection(selectionStart, selection.start); 
+            this.#createSelection(selectionStart, selection.start);
             document.execCommand('delete');
           }
         }
         else {
-          var endOfSpaceRun = selection.start;
-          var spaceMatch = /^ +/.exec(this.#text.slice(selection.start));
+          let endOfSpaceRun = selection.start;
+          const spaceMatch = /^ +/.exec(this.#text.slice(selection.start));
           if (spaceMatch){
             endOfSpaceRun += spaceMatch[0].length;
           }
@@ -119,9 +127,9 @@ class Hilited {
       }
     }
     else {
-      var selectionStart = selection.start;
-      var selectionEnd = selection.end;
-      var fromNode, fromOffset, toNode, toOffset;
+      selectionStart = selection.start;
+      let selectionEnd = selection.end;
+      let fromNode, fromOffset, toNode, toOffset;
       switch (selection.selection.direction){
         case 'backward':
           fromNode = selection.selection.focusNode;
@@ -150,11 +158,11 @@ class Hilited {
         selectionNeedsAdjustment = true;
       }
 
-      // if selection doesn't start at the start of the first line, adjust it so it does 
+      // if selection doesn't start at the start of the first line, adjust it so it does
       if (selectionStart > startLine.start) {
         selectionNeedsAdjustment = true;
         while (selectionStart > startLine.start){
-          var diff = selectionStart - startLine.start;
+          const diff = selectionStart - startLine.start;
           if (diff <= fromOffset) {
             fromOffset -= diff;
             break;
@@ -164,35 +172,36 @@ class Hilited {
           fromOffset = fromNode.data.length;
         }
       }
-      
+
       if (selectionNeedsAdjustment) {
         selection.selection.setBaseAndExtent(
-          fromNode, 
-          fromOffset, 
-          toNode, 
+          fromNode,
+          fromOffset,
+          toNode,
           toOffset
         );
       }
-      
-      endLine = this.#getLineForPosition(
-        selectionEnd, 
-        this.#lines, 
+
+      const endLine = this.#getLineForPosition(
+        selectionEnd,
+        this.#lines,
         startLine.line,
         startLine.line
       );
-      
+
       lines = this.#lines.slice(startLine.line, endLine.line + 1);
-      var lineText, lineTexts = [];
-      for (var i = 0; i < lines.length; i++){
-        var line = lines[i];
+      let lineText; 
+      const lineTexts = [];
+      for (let i = 0; i < lines.length; i++){
+        const line = lines[i];
         lineText = this.#text.slice(line.start, line.textEnd);
-        var leadingWhitespaceMatch = /^[ \t]*/.exec(lineText);
-        var leadingWhitespaceText = leadingWhitespaceMatch[0];
+        const leadingWhitespaceMatch = /^[ \t]*/.exec(lineText);
+        let leadingWhitespaceText = leadingWhitespaceMatch[0];
         lineText = lineText.slice(leadingWhitespaceText.length);
 
-        var numspaces, remainingspaces;
+        let remainingspaces;
         if (!hardTabs){
-          numspaces = leadingWhitespaceText.length - leadingWhitespaceText.replace(/ /g, '').length;
+          const numspaces = leadingWhitespaceText.length - leadingWhitespaceText.replace(/ /g, '').length;
           remainingspaces = numspaces % this.#tabSize;
         }
         if (shiftKey){
@@ -228,51 +237,51 @@ class Hilited {
       }
       textToInsert = lineTexts.join('\n');
     }
-    
+
     if (!textToInsert) {
       return;
     }
-    
+
     this.#saveScrollTop();
     this.#insertText(textToInsert);
     if (!selectionCollapsed){
-      
+
       this.#createSelection(
-        lines[0].start, 
-        lines[0].start + textToInsert.length, 
+        lines[0].start,
+        lines[0].start + textToInsert.length,
         selection.selection.direction
       );
-      
+
     }
     this.#scheduleRestoreScrollTop()
     return;
   }
-  
+
   #saveScrollTop(){
     this.#oldScrollTop = this.#element.scrollTop;
   }
-  
+
   #restoreScrollTop(){
     this.#element.scrollTop = this.#oldScrollTop;
   }
   #thisRestoreScrollTop = this.#restoreScrollTop.bind(this);
-  
+
   #scheduleRestoreScrollTop(){
     setTimeout(this.#thisRestoreScrollTop);
   }
-  
+
   #handleKeydown(event){
-    var key = event.key;
+    const key = event.key;
     switch (key) {
       case 'Tab':
         // Tabkey was hit. Normally this would change focus from the current element to whatever has the next by tabindex.
         // But, for an editor we want to implement special behavior
-        // - if any if ctrlKey, metaKey, altKey is pressed then we do default behavior 
+        // - if any if ctrlKey, metaKey, altKey is pressed then we do default behavior
         if (event.ctrlKey || event.metaKey || event.altKey) {
           // default behavior
           return;
         }
-        var shiftKey = event.shiftKey;
+        const shiftKey = event.shiftKey;
         setTimeout(function(){
           this.#handleTab(shiftKey);
         }.bind(this), 0);
@@ -282,7 +291,7 @@ class Hilited {
     }
   }
   #thisHandleKeydown = this.#handleKeydown.bind(this);
-  
+
   #handleBeforeInput(event){
     // https://w3c.github.io/input-events/#interface-InputEvent-Attributes
     switch (event.inputType){
@@ -310,30 +319,32 @@ class Hilited {
     this.#checkTextChange();
     switch (event.inputType){
       case 'insertLineBreak':
-        //event.preventDefault();
-        //this.#insertText('\r\n');
         this.#restoreScrollTop();
     }
+    this.#element.dispatchEvent(new CustomEvent('hilited:change', {
+      bubbles: true,
+      detail: { text: this.#text, lineCount: this.#lineCount }
+    }));
   }
   #thisHandleInput = this.#handleInput.bind(this);
-  
+
   #checkTextChange(){
     console.time('#checkTextChange');
-    var text = this.#getTextContent();
+    const text = this.#getTextContent();
     if (text === this.#text){
       console.timeEnd('#checkTextChange');
       return;
     }
     this.#text = text;
     this.#parseLines();
-    var token;
-    var i = 0;
-    for (; i < this.#tokens.length; i++){
+    let token;
+    let i;
+    for (i = 0; i < this.#tokens.length; i++){
       token = this.#tokens[i];
       if (token.groups.__other__ !== undefined){
         break;
       }
-      var tokenText = token[0];
+      const tokenText = token[0];
       if (text.slice(token.index, token.index + tokenText.length) === tokenText){
         continue;
       }
@@ -349,14 +360,13 @@ class Hilited {
   #textValueChanged(){
     setTimeout(this.#thisUpdateHighlighting,0);
   }
-  
+
   static #getLinesFromText(text){
-    var lines = [];
-    var position = 0;
-    var index;
+    const lines = [];
+    let index, position = 0;
     while (index !== -1) {
       index = text.indexOf('\n', position);
-      var line = {
+      const line = {
         line: lines.length,
         start: position,
         textEnd: index,
@@ -365,8 +375,8 @@ class Hilited {
       lines.push(line);
     };
     if (lines.length){
-      var lastLine = lines[lines.length - 1];
-      var lineTextLength = text.slice(lastLine.start).length;
+      const lastLine = lines[lines.length - 1];
+      const lineTextLength = text.slice(lastLine.start).length;
       if (lineTextLength){
         lastLine.textEnd = lastLine.start + lineTextLength;
         delete lastLine.end;
@@ -377,12 +387,12 @@ class Hilited {
     }
     return lines;
   }
-  
+
   #getTextContent(){
     console.time('#getTextContent');
     const childNodes = this.#element.childNodes;
     const chunks = [];
-    for (var i = 0; i < childNodes.length; i++){
+    for (let i = 0; i < childNodes.length; i++){
       const node = childNodes[i];
       switch(node.nodeType){
         case 1:
@@ -400,14 +410,14 @@ class Hilited {
           throw new Error(`Didn't expect node of type ${node.type}.`);
       }
     }
-    var textContent = chunks.join('');
+    const textContent = chunks.join('');
     console.timeEnd('#getTextContent');
     return textContent;
   }
 
   #parseLines(){
     console.time('#parseLines');
-    var lines = Hilited.#getLinesFromText(this.#text);
+    const lines = Hilited.#getLinesFromText(this.#text);
     this.#lineCount = lines.length;
     this.#lines = lines;
     console.timeEnd('#parseLines');
@@ -416,37 +426,35 @@ class Hilited {
   #getLines(){
     return this.#lines;
   }
-  
+
   getLineCount(){
     return this.#lineCount;
   }
-  
+
   getText(){
     return this.#text;
   }
-  
+
   #getLineForPosition(position, lines, currentLine, minLine, maxLine){
     console.time('#getLineForPosition');
-    var line;
     if (lines === undefined){
       lines = this.#lines;
     }
-    
+
     if (minLine === undefined) {
       minLine = 0;
     }
-    
+
     if (maxLine === undefined) {
       maxLine = lines.length - 1;
     }
-    
+
     if (currentLine === undefined){
-      currentLine = (maxLine - minLine) >> 1;
+      currentLine = 0;
     }
-    
-    var skip;
+
     do {
-      line = lines[currentLine];
+      const line = lines[currentLine];
       if (position < line.start) {
         maxLine = currentLine - 1;
       }
@@ -458,7 +466,8 @@ class Hilited {
         console.timeEnd('#getLineForPosition');
         return line;
       }
-      var diff = maxLine - minLine;
+      let skip;
+      const diff = maxLine - minLine;
       if (diff > 0) {
         skip = diff >> 1;
         if (skip === 0){
@@ -479,39 +488,39 @@ class Hilited {
   }
 
   #getVisibleLines(){
-    var scrollHeight = this.#element.scrollHeight;
+    let scrollHeight = this.#element.scrollHeight;
     scrollHeight -= this.#paddingTop;
     scrollHeight -= this.#paddingBottom;
-    var height = this.#element.clientHeight;
-    var lines = this.#getLines();
+    const height = this.#element.clientHeight;
+    const lines = this.#getLines();
     if (scrollHeight <= height) {
       this.#visibleLines = lines;
     }
     else {
-      var scrollTop = this.#element.scrollTop;
-      var ratio = scrollTop / scrollHeight;
-      var firstLine = Math.round(ratio * this.#lineCount);
+      const scrollTop = this.#element.scrollTop;
+      const ratio = scrollTop / scrollHeight;
+      const firstLine = Math.round(ratio * this.#lineCount);
 
-      var portion = height / scrollHeight;
-      var lineCount = Math.ceil(lines.length * portion);
+      const portion = height / scrollHeight;
+      const lineCount = Math.ceil(lines.length * portion);
       this.#visibleLines = lines.slice(firstLine, firstLine + lineCount);
     }
-    
+
     this.#element.parentNode.style.setProperty('--linenumber', this.#visibleLines.length === 0 ? 1 : this.#visibleLines[0].line)
     return this.#visibleLines;
   }
 
   #prepareTokenizer(start, end){
-    var tokens = [];
+    const tokens = [];
     this.#hasMoreTokens = undefined;
-    var lastTokenEndPosition = 0;
+    let lastTokenEndPosition = 0;
     this.#text  = this.getText();
 
     if (this.#tokens.length) {
-      var token = this.#tokens[this.#tokens.length - 1];
+      let token = this.#tokens[this.#tokens.length - 1];
       lastTokenEndPosition = token.index + token[0].length;
       if (start < lastTokenEndPosition){
-        for (var i = 0; i < this.#tokens.length; i++){
+        for (let i = 0; i < this.#tokens.length; i++){
           token = this.#tokens[i];
           lastTokenEndPosition = token.index + token[0].length;
           if (lastTokenEndPosition < start) {
@@ -533,16 +542,16 @@ class Hilited {
   }
 
   #getNextToken(){
-    var currentIndex = this.#tokenizer.lastIndex;
-    var token = this.#tokenizer.exec(this.#text);
-    var lightWeightToken = [];
+    const currentIndex = this.#tokenizer.lastIndex;
+    const token = this.#tokenizer.exec(this.#text);
+    const lightWeightToken = [];
     lightWeightToken.groups = {};
     if (!token || token.index !== currentIndex) {
       // oops - we couldn't match a piece of string and skipped over it.
       // we will present this as a __other__ pseudotoken
-      var resumeIndex = token ? token.index : this.#text.length;
+      const resumeIndex = token ? token.index : this.#text.length;
       this.#tokenizer.lastIndex = resumeIndex;
-      var skippedText = this.#text.substring(currentIndex, resumeIndex);
+      const skippedText = this.#text.substring(currentIndex, resumeIndex);
       lightWeightToken[0] = skippedText;
       lightWeightToken.groups['__other__'] = skippedText;
       lightWeightToken.index = currentIndex;
@@ -553,16 +562,16 @@ class Hilited {
     }
     else {
       lightWeightToken[0] =  token[0];
-      var groups = token.groups;
-      for (var groupName in groups) {
+      const groups = token.groups;
+      for (let groupName in groups) {
         if (!groups[groupName]){
           continue;
-        }        
+        }
         lightWeightToken.groups[groupName] = lightWeightToken[0];
         lightWeightToken.index = token.index;
       }
     }
-    
+
     if (token === null || token.index + token[0].length >= this.#text.length) {
       this.#hasMoreTokens = false;
       //free lastMatch of regex
@@ -571,14 +580,14 @@ class Hilited {
     else {
       this.#hasMoreTokens = true;
     }
-    
+
     return lightWeightToken;
   }
 
   #getTokensForRange(start, end) {
-    var tokens = this.#prepareTokenizer(start, end);
-    var prevToken, token;
-    var i = 0;
+    const tokens = this.#prepareTokenizer(start, end);
+    let prevToken, token;
+    let i = 0;
     while (this.#hasMoreTokens ) {
       token = this.#getNextToken();
       i += 1;
@@ -611,28 +620,28 @@ class Hilited {
     }
     return tokens;
   }
-  
+
   #addHighlighterRange(
     token,
     startContainer, startOffset,
     endContainer, endOffset
   ){
-    var tokenText = token[0];
-    var groups = token.groups;
-    var highlighters = [];
-    var highlighterPrefix = this.#options.highlighterPrefix;
-    for (var groupName in groups) {
+    const tokenText = token[0];
+    const groups = token.groups;
+    const highlighters = [];
+    const highlighterPrefix = this.#options.highlighterPrefix;
+    for (let groupName in groups) {
       if (groups[groupName] !== tokenText){
         continue;
       }
-      var highlightName = `${highlighterPrefix}-${groupName}`;
-      var highlighter = CSS.highlights.get(highlightName);
+      const highlightName = `${highlighterPrefix}-${groupName}`;
+      let highlighter = CSS.highlights.get(highlightName);
       if (!highlighter){
         highlighter = new Highlight();
         CSS.highlights.set(highlightName, highlighter);
         this.#highlighters[highlightName] = highlighter;
       }
-      var range = new StaticRange({
+      const range = new StaticRange({
         startContainer: startContainer,
         startOffset: startOffset,
         endContainer: endContainer,
@@ -643,7 +652,7 @@ class Hilited {
   }
 
   #clearHighlights(){
-    for (var hightlightName in this.#highlighters) {
+    for (let hightlightName in this.#highlighters) {
       var highlighter = this.#highlighters[hightlightName];
       highlighter.clear();
     }
@@ -659,22 +668,22 @@ class Hilited {
           textNodes.push(childNode);
       }
     }
-    var textNodeIndex = 0;
-    var startTextNode = textNodes[textNodeIndex];
-    var startTextNodeRangeStart = 0;
-    var startTextNodeRangeEnd = startTextNode.data.length;
-    var endTextNode, endTextNodeRangeStart, endTextNodeRangeEnd;
-    var visibleLines = this.#getVisibleLines();
-    
-    
+    let textNodeIndex = 0;
+    let startTextNode = textNodes[textNodeIndex];
+    let startTextNodeRangeStart = 0;
+    let startTextNodeRangeEnd = startTextNode.data.length;
+    let endTextNode, endTextNodeRangeStart, endTextNodeRangeEnd;
+    const visibleLines = this.#getVisibleLines();
+
+
     this.#clearHighlights();
     // tokenize to find the first (partially) visible token
-    var firstVisibleLine = visibleLines[0];
-    var lastVisibleLine = visibleLines[visibleLines.length - 1];
+    const firstVisibleLine = visibleLines[0];
+    const lastVisibleLine = visibleLines[visibleLines.length - 1];
 
-    var tokens = this.#getTokensForRange(firstVisibleLine.start, lastVisibleLine.textEnd);
-    for (var i = 0; i < tokens.length; i++){
-      var token = tokens[i];
+    const tokens = this.#getTokensForRange(firstVisibleLine.start, lastVisibleLine.textEnd);
+    for (let i = 0; i < tokens.length; i++){
+      const token = tokens[i];
       while (startTextNodeRangeEnd <= token.index){
         startTextNode = textNodes[++textNodeIndex];
         if (!startTextNode) {
@@ -687,11 +696,11 @@ class Hilited {
         startTextNodeRangeEnd += startTextNode.data.length;
       }
 
-      var tokenRangeEnd = token.index + token[0].length;
+      const tokenRangeEnd = token.index + token[0].length;
       endTextNode = startTextNode;
       endTextNodeRangeStart = startTextNodeRangeStart;
       endTextNodeRangeEnd = startTextNodeRangeEnd;
-      
+
       while (textNodeIndex < textNodes.length - 1 && endTextNodeRangeEnd < tokenRangeEnd){
         endTextNode = textNodes[++textNodeIndex];
         if (endTextNode.nodeType !== 3){
@@ -701,7 +710,7 @@ class Hilited {
         endTextNodeRangeEnd += endTextNode.data.length;
       }
       this.#addHighlighterRange(
-        token, 
+        token,
         startTextNode, token.index - startTextNodeRangeStart,
         endTextNode, tokenRangeEnd - endTextNodeRangeStart
       );
@@ -711,7 +720,7 @@ class Hilited {
     }
   }
   #thisUpdateHighlighting = (this.#updateHighlighting.bind(this));
-  
+
   #createSelection(from, to, direction){
     return SelectionHelper.create(this.#element, from, to, direction);
   }
@@ -719,11 +728,11 @@ class Hilited {
   #getSelection(){
     return SelectionHelper.get(this.#element);
   }
-  
+
   #hasSelection(){
     return SelectionHelper.has(this.#element);
   }
- 
+
   #insertText(text){
     if (!this.#hasSelection()){
       return;
@@ -732,12 +741,12 @@ class Hilited {
     if (document.execCommand('insertText', undefined, text)){
       return;
     }
-    
+
   }
-  
+
   setText(text){
     this.#element.textContent = '';
-    var selection = document.getSelection();
+    const selection = document.getSelection();
     selection.setBaseAndExtent(this.#element, 0, this.#element, 0);
     this.#text = text;
     this.#element.textContent = '';
@@ -746,6 +755,29 @@ class Hilited {
     this.#updateHighlighting();
   }
 
+  #handleDocumentSelectionChange(){
+    this.#selectionChangePending = true;
+  }
+  #thisHandleDocumentSelectionChange = this.#handleDocumentSelectionChange.bind(this);
+
+  #emitSelectionChange(){
+    if (!this.#selectionChangePending) return;
+    this.#selectionChangePending = false;
+    if (!this.#hasSelection()) return;
+    const sel = this.#getSelection();
+    const line = this.#getLineForPosition(sel.start, this.#lines);
+    if (!line) return;
+    this.#element.dispatchEvent(new CustomEvent('hilited:select', {
+      bubbles: true,
+      detail: {
+        position: sel.start + 1,
+        line: line.line + 1,
+        column: sel.start - line.start + 1
+      }
+    }));
+  }
+  #thisEmitSelectionChange = this.#emitSelectionChange.bind(this);
+
   #eventHandlers = {
     'beforeinput': this.#thisHandleBeforeInput,
     'input': this.#thisHandleInput,
@@ -753,21 +785,21 @@ class Hilited {
     'scrollend': this.#thisHandleScrollEnd,
     'keydown': this.#thisHandleKeydown
   }
-  
+
   #wireEvents(onOff){
     const element = this.#element;
     const method = element[ ( onOff ? 'add' : 'remove' ) + 'EventListener' ];
     Object
     .keys(this.#eventHandlers)
     .forEach(
-      (id, index, handlers) => method.call( element, id, handlers[id] ) 
+      (id, index, handlers) => method.call( element, id, handlers[id] )
     );
   }
-  
+
   get element(){
     return this.#element;
   }
-  
+
   constructor(options){
     let configElement = options.element;
     const typeOfConfigElement = typeof configElement;
@@ -778,6 +810,9 @@ class Hilited {
       throw new TypeError(`Config element should resolve to an DOM Element node!`);
     }
     this.#element = configElement;
+    if (options.text){
+      this.#element.textContent = options.text;
+    }
 
     this.#options = Object.assign(Hilited.#defaultOptions, options);
     this.#updateElementDimension();
@@ -787,20 +822,28 @@ class Hilited {
     this.#element.setAttribute('translate', 'no');
     this.#element.setAttribute('writingsuggestions', 'false');
     this.#element.classList.add('hilited');
-    
+
     this.#wireEvents(true);
-    
+    document.addEventListener('selectionchange', this.#thisHandleDocumentSelectionChange);
+    this.#selectionInterval = setInterval(this.#thisEmitSelectionChange, 250);
+
     this.#resizeObserver = new ResizeObserver(this.#thisHandleResize);
     this.#resizeObserver.observe(this.#element);
 
     this.#tokenizer = options.regexp;
-    
+
     this.setText(this.#getTextContent());
     this.#syncLinenumber();
   }
-  
+
   destroy(){
     this.#wireEvents(false);
-  }   
- 
+    this.#tokens = [];
+    this.#lines = [];
+    this.#visibleLines = [];
+    this.#clearHighlights();
+    document.removeEventListener('selectionchange', this.#thisHandleDocumentSelectionChange);
+    clearInterval(this.#selectionInterval);
+  }
+
 }

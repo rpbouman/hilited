@@ -71,172 +71,95 @@
     </section>
 
     <script>
-      var hilitedElementEditor = document.querySelector('.hilited-editor');
-      var syncingGutterTimeout = undefined;
-      var resizeObserver = new ResizeObserver(function(){
-        if (syncingGutterTimeout !== undefined){
-          clearTimeout(syncingGutterTimeout);
-        }
-        syncingGutterTimeout = setTimeout(syncGutterLines, 250);
-      });
-      resizeObserver.observe(hilitedElementEditor);
+      const hilitedElementEditor = document.querySelector('.hilited-editor');
+      const gutter = document.querySelector('.hilited-gutter');
 
       function syncGutterLines(){
-        var gutter = document.querySelector('.hilited-gutter'); 
         const height = hilitedElementEditor.offsetHeight;
-        let lastElementChild = gutter.lastElementChild;
-        let childHeight = lastElementChild ? lastElementChild.offsetTop + lastElementChild.clientHeight : 0;
+        let last = gutter.lastElementChild;
+        let childHeight = last ? last.offsetTop + last.clientHeight : 0;
         while (childHeight < height) {
-          child = document.createElement('div');
+          const child = document.createElement('div');
           child.textContent = String.fromCharCode(160);
           gutter.appendChild(child);
           childHeight = child.offsetTop + child.clientHeight;
         }
-        lastElementChild = gutter.lastElementChild;
-        childHeight = lastElementChild ? lastElementChild.offsetTop + lastElementChild.clientHeight : 0;
         while (
-          (lastElementChild = gutter.lastElementChild) && 
-          (lastElementChild.offsetTop + lastElementChild.clientHeight) > height
+          (last = gutter.lastElementChild) &&
+          (last.offsetTop + last.clientHeight) > height
         ){
-          gutter.removeChild(gutter.lastElementChild);
+          gutter.removeChild(last);
         }
-        syncingGutterTimeout = undefined;
       }
-  
-      function updatePosition(){
-        if (selectionChanged === true) {
-          return;
-        }
-        // first, ensure this selection change pertains to our editor
-        var selection = document.getSelection();
-        var focusNode = selection.focusNode;
-        var node = focusNode;
-        if (node.nodeType === 3) {
-          node = node.parentNode;
-        }
-
-        if (node !== hilitedElementEditor) {
-          // selection is not about our editor, leave
-          return;
-        }
-       
-        //selection is about our editor.
-        var childNodes = hilitedElementEditor.childNodes;
-        var text = '';
-        _loop: for (var i = 0; i < childNodes.length; i++){
-          node = childNodes[i];
-          switch (node.nodeType){
-            case 3:
-              var end;
-              if (node === focusNode) {
-                text += node.data.slice(0, selection.focusOffset);
-                break _loop;
-              }
-              else {
-                text += node.data;
-              }
-              break;
-            default: continue;
-          }
-        }
-        // set the position
-        document.getElementById('position').textContent = text.length + 1;
-
-        // set the line
-        var lineCount = 0;
-        var index = 0;
-        while(true) {
-          index = text.indexOf('\n', index) + 1;
-          if (!index){
-            break;
-          }
-          lineCount += 1;
-        }
-        document.getElementById('line').textContent = lineCount + 1;
-        
-        if (focusNode.nodeType === 1) {
-          focusNode = focusNode.previousSibling;
-        }
-        // set the column
-        var column = selection.focusOffset;
-        text = focusNode.data.slice(0, column);
-        var index = text.lastIndexOf('\n');
-        if (index !== -1){
-          column = column - index;
-        }
-        column += 1;
-
-        document.getElementById('column').textContent =  column;
-      }
-
-      var selectionChanged = false;
-      document.addEventListener('selectionchange', function(event){
-        selectionChanged = true;
-      });
-      
-      setInterval(function(){
-        if (selectionChanged === true){ 
-          selectionChanged = false;
-          updatePosition();
-        }
-      }, 250);
-      
-      hilitedElementEditor.addEventListener('input', function(event){
-        setTimeout(function(){
-          document.getElementById('length').textContent = hilited.getText().length + 1;
-          document.getElementById('lines').textContent = hilited.getLineCount();
-        },100);
-      });
     </script>
-    
+
     <script>
-      var hilitedElementEditor = document.querySelector('.hilited-editor');
       const language = document.getElementById('language');
       let hilited = undefined;
+
       function instantiateEditor(){
+        if (hilited) {
+          hilited.destroy();
+        }
         const value = language.value;
         const sample = hilitedSamples[value];
-        hilitedElementEditor.textContent = sample.code;
         const styles = sample.styles;
-        const stylesheet = document.getElementById(styles);
-        if ( !stylesheet ){
-          const linkElement = document.createElement('link');
-          linkElement.rel = "stylesheet";
-          linkElement.type = "text/css";
-          linkElement.href = styles;
-          linkElement.id = styles;
-          document.head.appendChild(linkElement);
-        }
-        
-        const highlighterPrefix = sample.highlighterPrefix;
-        const regexp = sample.regexp;
-        if (hilited){
-          hilited.destroy();
+        if (!document.getElementById(styles)){
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.type = 'text/css';
+          link.href = styles;
+          link.id = styles;
+          document.head.appendChild(link);
         }
         hilited = new Hilited({
           element: '.hilited-editor',
+          text: sample.code,
           hardTabs: false,
-          highlighterPrefix: highlighterPrefix,
-          regexp: regexp
+          highlighterPrefix: sample.highlighterPrefix,
+          regexp: sample.regexp
         });
+
+        const hilitedElementEditor = hilited.element;
+        const container = hilitedElementEditor.parentNode;
+        const lengthEl = container.querySelector('.hilited-length > output');
+        const linesEl = container.querySelector('.hilited-lines > output');
+        const lineEl = container.querySelector('.hilited-line > output');
+        const columnEl = container.querySelector('.hilited-column > output');
+        const positionEl = container.querySelector('.hilited-position > output');
+
+        function updateLengthLines(){
+          lengthEl.textContent = hilited.getText().length + 1;
+          linesEl.textContent = hilited.getLineCount();
+        }
+
+        // seed initial display state
+        updateLengthLines();
+        syncGutterLines(); // gutter also needs an initial render
+
+        // peripherals — plain event listeners, no classes needed
+        hilitedElementEditor.addEventListener('hilited:change', e => updateLengthLines());
+
+        hilitedElementEditor.addEventListener('hilited:select', e => {
+          lineEl.textContent = e.detail.line;
+          columnEl.textContent = e.detail.column;
+          positionEl.textContent = e.detail.position;
+        });
+
+        hilitedElementEditor.addEventListener('hilited:resize', syncGutterLines);
         hilitedElementEditor.focus();
       }
-      
-      language.addEventListener('change', event => instantiateEditor());
-      
-      language.innerHTML = Object.keys(hilitedSamples).sort((a,b) => {
-        const sampleA = hilitedSamples[a];
-        a = sampleA.label || a;
-        const sampleB = hilitedSamples[b];
-        b = sampleB.label || b;
-        
-        if (a > b) return 1;
-        if (a < b) return -1;
-        return 0;
-      }).map((key, index) => {
-        return `<option value="${key}">${hilitedSamples[key].label}</option>`
-      }).join('\n');
-      
+
+      language.addEventListener('change', () => instantiateEditor());
+
+      language.innerHTML = Object.keys(hilitedSamples).sort((a, b) => {
+        a = hilitedSamples[a].label || a;
+        b = hilitedSamples[b].label || b;
+        return a > b ? 1 : a < b ? -1 : 0;
+      }).map(key =>
+        `<option value="${key}">${hilitedSamples[key].label}</option>`
+      ).join('\n');
+
       instantiateEditor();
     </script>
     
