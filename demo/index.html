@@ -94,14 +94,34 @@
     </script>
 
     <script>
+      const openFile = document.getElementById('openFile');
+      openFile.addEventListener('change', async event => {
+        const file = event.target.files[0];
+        const nameParts = file.name.split('.');
+        const extension = nameParts.pop();
+        let languageName;
+        const sample = Object
+        .keys(samples)
+        .find(key => {
+          const sample = samples[key];
+          if (sample.extensions === extension) {
+            languageName = key;
+          }
+        });
+        const text = await file.text();
+        instantiateEditor(languageName, text);
+      });
+    
       const language = document.getElementById('language');
       let hilited = undefined;
 
-      function instantiateEditor(){
+      function instantiateEditor(value, text){
         if (hilited) {
           hilited.destroy();
         }
-        const value = language.value;
+        if (value === undefined){
+          value = language.value;
+        };
         const sample = hilitedSamples[value];
         const styles = sample.styles;
         if (!document.getElementById(styles)){
@@ -114,7 +134,7 @@
         }
         hilited = new Hilited({
           element: '.hilited-editor',
-          text: sample.code,
+          text: text || sample.code,
           hardTabs: false,
           highlighterPrefix: sample.highlighterPrefix,
           regexp: sample.regexp
@@ -150,17 +170,30 @@
         hilitedElementEditor.focus();
       }
 
-      language.addEventListener('change', () => instantiateEditor());
-
-      language.innerHTML = Object.keys(hilitedSamples).sort((a, b) => {
+      language.addEventListener('change', event => instantiateEditor(event.target.value));
+      let fileExtensions = [];
+      language.innerHTML = Object
+      .keys(hilitedSamples)
+      .sort((a, b) => {
         a = hilitedSamples[a].label || a;
         b = hilitedSamples[b].label || b;
         return a > b ? 1 : a < b ? -1 : 0;
-      }).map(key =>
-        `<option value="${key}">${hilitedSamples[key].label}</option>`
-      ).join('\n');
-
-      instantiateEditor();
+      }).map(key => {
+        const sample = hilitedSamples[key];
+        let extensions;
+        if (typeof sample.extensions === 'string'){
+          extensions = sample.extensions.split(',').map(extension => extension.trim());
+        }
+        if (extensions instanceof Array){
+          extensions = extensions.filter(extension => !fileExtensions.includes(extension));
+          if (extensions.length){
+            fileExtensions = fileExtensions.concat(extensions);
+          }
+        }
+        return `<option value="${key}">${sample.label}</option>`;
+      }).join('\n');
+      document.getElementById('openFile').setAttribute('accept', fileExtensions.sort().join(','))
+      instantiateEditor(language.value);
     </script>
     
   </body>
