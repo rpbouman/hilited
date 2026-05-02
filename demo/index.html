@@ -95,8 +95,8 @@
       let hilitedPerhipherals = undefined;
       function instantiateEditor(value, text){
         if (hilited) {
-          hilited.destroy();
           hilitedPerhipherals.destroy();
+          hilited.destroy();
         }
         if (value === undefined){
           value = language.value;

@@ -44,26 +44,19 @@ section.hilited {
           text-align: right;
           font-family: ui-monospace;
           display: inline-block;
-        }
-
-        &.hilited-line,
-        &.hilited-lines {
-          > output {
+          
+          &:is( [name=line], [name=lines] ) {
             width: 6ch;
           }
-        }
-
-        &.hilited-position,
-        &.hilited-length {
-          > output {
+          
+          &:is( [name=position], [name=length] ) {
             width: 8ch;
           }
-        }
-
-        &.hilited-column {
-          > output {
+          
+          &:is( [name=column] ){
             width: 4ch;
           }
+          
         }
 
         &:not( :first-child ) {

@@ -86,10 +86,25 @@ class HilitedPeripherals {
     }
   }
   
+  #eventHandlers = {
+    'hilited:change': this.#changeHandler,
+    'hilited:select': this.#selectionHandler,
+    'hilited:resize': this.#resizeHandler
+  }
+
+  #wireEvents(onOff){
+    const element = this.#hilited.element;
+    const method = element[ ( onOff ? 'add' : 'remove' ) + 'EventListener' ];
+    Object
+    .keys(this.#eventHandlers)
+    .forEach(
+      id => method.call( element, id, this.#eventHandlers[id] )
+    );
+  }
+  
+  
   destroy(){
-    hilitedElementEditor.removeEventListener('hilited:change', this.#changeHandler);
-    hilitedElementEditor.removeEventListener('hilited:select', this.#selectionHandler);
-    hilitedElementEditor.removeEventListener('hilited:resize', this.#resizeHandler);
+    this.#wireEvents(false);
   }  
 
   constructor(options){
@@ -102,9 +117,7 @@ class HilitedPeripherals {
     );
     this.#syncGutterLines();
 
-    hilitedElementEditor.addEventListener('hilited:change', this.#changeHandler);
-    hilitedElementEditor.addEventListener('hilited:select', this.#selectionHandler);
-    hilitedElementEditor.addEventListener('hilited:resize', this.#resizeHandler);
+    this.#wireEvents(true);
     hilitedElementEditor.focus();
   }
 }
