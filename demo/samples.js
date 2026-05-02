@@ -1,3 +1,20 @@
+/**
+* These are samples for demonstration purpose of Hilited.
+*
+* The samples illustrate some key elements in making Hilited work with a language of your choice
+*
+* - regexp: A JavaScript Regular Expression Object that can be used as tokenizer.
+*   This regular expression takes the form of a collection of named capturing groups
+*   The Hilited editor determins a range of the text to tokenize, and applies the regular expression, which results in tokens.
+*   The first match is tried at the start of the input, and each next match is tried directly after the end of the previous match.
+*   If the next match does not follow directly after the previous match, a synthetic token with the name __other__ is produced.
+*   The actual highlighting is done by creating highlighting ranges, 
+*   which get the name of the highlighterPrefix option passed to the highlighed constructor, followed by a dash and then followd by the token name.
+*
+* - styles: A css stylesheet that contains styling for ::highlight pseudo elements named after the token names.
+*   Note that styling options for ::highlight pseudo elements are limited because the cannot affect any positioning. 
+*   In practice, you can use text-level styling such as color, background-color, text-decoration and text-shadow
+*/
 const hilitedSamples = {
   "duckdbsql": {
     label: "SQL (DuckDB)",
