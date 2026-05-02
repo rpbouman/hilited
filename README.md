@@ -1,6 +1,8 @@
 # Hilited
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/rpbouman/hilited)
 
 A browser-based code editor with syntax highlighting built on the **CSS Custom Highlight API**.
+[Checkout the live demo](https://rpbouman.github.io/hilited/demo/) here: https://rpbouman.github.io/hilited/demo/
 
 ---
 
