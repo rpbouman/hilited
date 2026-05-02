@@ -1,0 +1,155 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Hilited</title>
+    <link rel="stylesheet" type="text/css" href="../src/Hilited.css"/>
+    <script src="../src/SelectionHelper.js"></script>
+    <script src="../src/Hilited.js"></script>
+    <script src="../src/HilitedPeripherals.js"></script>
+    <script src="./samples.js"></script>
+    <script src="../../RegXpChef/src/RegXpChef.js"></script>
+  </head>
+  <body>
+    <section class="hilited">
+      <menu role="toolbar">
+        <li item="menu-item">
+          <label for="openFile">Open File
+            <input id="openFile" type="file"/>
+          </label>
+        </li>
+        <li item="menu-item">
+          <label for="language">Language</label>
+          <select id="language">
+            <option></option>
+          </select>
+        </li>
+      </menu>
+      <pre
+        class="hilited-gutter"
+        style="
+          display: inline-block;
+          position: relative;
+          width: 8ch;
+        "
+      >
+      </pre>
+      <code 
+        class="hilited-editor"
+        style="
+          tab-size:4;
+          width: 80ch;
+          height: 21rem;
+        "
+      >{
+  "numberkey": 1.234,
+  "stringkey": "string value",
+  "nullkey": null,
+  "truekey": true,
+  "falsekey": false
+}</code>
+      <menu role="toolbar">
+        <li class="hilited-length">
+          <label for="length">length</label>
+          <output name="length"></output>
+        </li>
+        <li class="hilited-lines">
+          <label for="lines">lines</label>
+          <output name="lines"></output>
+        </li>
+        <li class="hilited-line">
+          <label for="line">Ln</label>
+          <output name="line"></output>
+        </li>
+        <li class="hilited-column">
+          <label for="line">Col</label>
+          <output name="column"></output>
+        </li>
+        <li class="hilited-position">
+          <label for="line">Pos</label>
+          <output name="position"></output>
+        </li>
+      </menu>
+    </section>
+
+    <script>
+      const openFile = document.getElementById('openFile');
+      openFile.addEventListener('change', async event => {
+        const file = event.target.files[0];
+        const nameParts = file.name.split('.');
+        const extension = nameParts.pop();
+        let languageName;
+        const sample = Object
+        .keys(samples)
+        .find(key => {
+          const sample = samples[key];
+          if (sample.extensions === extension) {
+            languageName = key;
+          }
+        });
+        const text = await file.text();
+        instantiateEditor(languageName, text);
+      });
+    
+      const language = document.getElementById('language');
+      let hilited = undefined;
+      let hilitedPerhipherals = undefined;
+      function instantiateEditor(value, text){
+        if (hilited) {
+          hilitedPerhipherals.destroy();
+          hilited.destroy();
+        }
+        if (value === undefined){
+          value = language.value;
+        };
+        const sample = hilitedSamples[value];
+        const styles = sample.styles;
+        if (!document.getElementById(styles)){
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.type = 'text/css';
+          link.href = styles;
+          link.id = styles;
+          document.head.appendChild(link);
+        }
+        hilited = new Hilited({
+          element: '.hilited-editor',
+          text: text || sample.code,
+          hardTabs: false,
+          highlighterPrefix: sample.highlighterPrefix,
+          regexp: sample.regexp
+        });
+        hilitedPerhipherals = new HilitedPeripherals({
+          hilited: hilited
+        })
+
+        hilited.element.focus();
+      }
+
+      language.addEventListener('change', event => instantiateEditor(event.target.value));
+      let fileExtensions = [];
+      language.innerHTML = Object
+      .keys(hilitedSamples)
+      .sort((a, b) => {
+        a = hilitedSamples[a].label || a;
+        b = hilitedSamples[b].label || b;
+        return a > b ? 1 : a < b ? -1 : 0;
+      }).map(key => {
+        const sample = hilitedSamples[key];
+        let extensions;
+        if (typeof sample.extensions === 'string'){
+          extensions = sample .extensions.split(',').map(extension => extension.trim());
+        }
+        if (extensions instanceof Array){
+          extensions = extensions.filter(extension => !fileExtensions.includes(extension));
+          if (extensions.length){
+            fileExtensions = fileExtensions.concat(extensions);
+          }
+        }
+        return `<option value="${key}">${sample.label}</option>`;
+      }).join('\n');
+      document.getElementById('openFile').setAttribute('accept', fileExtensions.sort().join(','))
+      instantiateEditor(language.value);
+    </script>
+    
+  </body>
+</html>
