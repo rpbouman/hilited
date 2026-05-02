@@ -14,7 +14,7 @@ section.hilited {
 
 
   > menu[role=toolbar] {
-    
+
     list-style-type: none;
     margin-block-start: 0px;
     margin-block-end: 0px;
@@ -35,24 +35,24 @@ section.hilited {
       grid-area: footer;
 
       > li {
-        
+
         > label::after {
           content: ': ';
         }
-        
+
         > output {
           text-align: right;
           font-family: ui-monospace;
           display: inline-block;
         }
-        
+
         &.hilited-line,
         &.hilited-lines {
           > output {
             width: 6ch;
           }
         }
-        
+
         &.hilited-position,
         &.hilited-length {
           > output {
@@ -65,7 +65,7 @@ section.hilited {
             width: 4ch;
           }
         }
-        
+
         &:not( :first-child ) {
           border-left-style: solid;
           border-left-color: buttonborder;
@@ -76,11 +76,11 @@ section.hilited {
     }
   }
 
-    
+
   &:has( .hilited-editor ) {
-  
+
     counter-reset: linenumber var( --linenumber );
-              
+
     > .hilited-gutter {
 
       > div::before {
@@ -89,7 +89,7 @@ section.hilited {
       }
     }
   }
-  
+
   > .hilited-gutter {
     grid-area: sidebar;
     text-align: right;
@@ -98,7 +98,7 @@ section.hilited {
     font-family: monospace;
     white-space: nowrap;
   }
-  
+
   > .hilited-editor {
     grid-area: main;
     tab-size:4;
@@ -115,5 +115,5 @@ section.hilited {
     font-family: monospace;
     white-space: pre;
   }
-    
+
 }

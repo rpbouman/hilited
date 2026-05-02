@@ -5,6 +5,7 @@
     <link rel="stylesheet" type="text/css" href="../src/Hilited.css"/>
     <script src="../src/SelectionHelper.js"></script>
     <script src="../src/Hilited.js"></script>
+    <script src="../src/HilitedPeripherals.js"></script>
     <script src="./samples.js"></script>
     <script src="../../RegXpChef/src/RegXpChef.js"></script>
   </head>
@@ -49,49 +50,26 @@
       <menu role="toolbar">
         <li class="hilited-length">
           <label for="length">length</label>
-          <output id="length"></output>
+          <output name="length"></output>
         </li>
         <li class="hilited-lines">
           <label for="lines">lines</label>
-          <output id="lines"></output>
+          <output name="lines"></output>
         </li>
         <li class="hilited-line">
           <label for="line">Ln</label>
-          <output id="line"></output>
+          <output name="line"></output>
         </li>
         <li class="hilited-column">
           <label for="line">Col</label>
-          <output id="column"></output>
+          <output name="column"></output>
         </li>
         <li class="hilited-position">
           <label for="line">Pos</label>
-          <output id="position"></output>
+          <output name="position"></output>
         </li>
       </menu>
     </section>
-
-    <script>
-      const hilitedElementEditor = document.querySelector('.hilited-editor');
-      const gutter = document.querySelector('.hilited-gutter');
-
-      function syncGutterLines(){
-        const height = hilitedElementEditor.offsetHeight;
-        let last = gutter.lastElementChild;
-        let childHeight = last ? last.offsetTop + last.clientHeight : 0;
-        while (childHeight < height) {
-          const child = document.createElement('div');
-          child.textContent = String.fromCharCode(160);
-          gutter.appendChild(child);
-          childHeight = child.offsetTop + child.clientHeight;
-        }
-        while (
-          (last = gutter.lastElementChild) &&
-          (last.offsetTop + last.clientHeight) > height
-        ){
-          gutter.removeChild(last);
-        }
-      }
-    </script>
 
     <script>
       const openFile = document.getElementById('openFile');
@@ -114,10 +92,11 @@
     
       const language = document.getElementById('language');
       let hilited = undefined;
-
+      let hilitedPerhipherals = undefined;
       function instantiateEditor(value, text){
         if (hilited) {
           hilited.destroy();
+          hilitedPerhipherals.destroy();
         }
         if (value === undefined){
           value = language.value;
@@ -139,35 +118,11 @@
           highlighterPrefix: sample.highlighterPrefix,
           regexp: sample.regexp
         });
+        hilitedPerhipherals = new HilitedPeripherals({
+          hilited: hilited
+        })
 
-        const hilitedElementEditor = hilited.element;
-        const container = hilitedElementEditor.parentNode;
-        const lengthEl = container.querySelector('.hilited-length > output');
-        const linesEl = container.querySelector('.hilited-lines > output');
-        const lineEl = container.querySelector('.hilited-line > output');
-        const columnEl = container.querySelector('.hilited-column > output');
-        const positionEl = container.querySelector('.hilited-position > output');
-
-        function updateLengthLines(){
-          lengthEl.textContent = hilited.getText().length + 1;
-          linesEl.textContent = hilited.getLineCount();
-        }
-
-        // seed initial display state
-        updateLengthLines();
-        syncGutterLines(); // gutter also needs an initial render
-
-        // peripherals — plain event listeners, no classes needed
-        hilitedElementEditor.addEventListener('hilited:change', e => updateLengthLines());
-
-        hilitedElementEditor.addEventListener('hilited:select', e => {
-          lineEl.textContent = e.detail.line;
-          columnEl.textContent = e.detail.column;
-          positionEl.textContent = e.detail.position;
-        });
-
-        hilitedElementEditor.addEventListener('hilited:resize', syncGutterLines);
-        hilitedElementEditor.focus();
+        hilited.element.focus();
       }
 
       language.addEventListener('change', event => instantiateEditor(event.target.value));
@@ -182,7 +137,7 @@
         const sample = hilitedSamples[key];
         let extensions;
         if (typeof sample.extensions === 'string'){
-          extensions = sample.extensions.split(',').map(extension => extension.trim());
+          extensions = sample .extensions.split(',').map(extension => extension.trim());
         }
         if (extensions instanceof Array){
           extensions = extensions.filter(extension => !fileExtensions.includes(extension));

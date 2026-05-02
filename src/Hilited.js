@@ -792,7 +792,7 @@ class Hilited {
     Object
     .keys(this.#eventHandlers)
     .forEach(
-      (id, index, handlers) => method.call( element, id, handlers[id] )
+      id => method.call( element, id, this.#eventHandlers[id] )
     );
   }
 
